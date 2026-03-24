@@ -48,6 +48,10 @@ export class FaceProximityViewModel {
   detectedCount: number = 0;
   /** 上次检测时间戳（ms） */
   lastDetectTime: number = 0;
+  /** 当前帧中检测到的人脸数量（0 表示无人脸） */
+  faceCount: number = 0;
+  /** 当前人脸检测置信度 0.0~1.0 */
+  faceConfidence: number = 0.0;
   /** 摄像头预览 SurfaceId（由 XComponent 回调后设置） */
   surfaceId: string = '';
   /** 服务状态 */
@@ -104,6 +108,8 @@ export class FaceProximityViewModel {
     await ScreenControlUtils.releaseScreenLock();
     this.isServiceRunning = false;
     this.presenceState = PresenceState.UNKNOWN;
+    this.faceCount = 0;
+    this.faceConfidence = 0.0;
     Logger.info(TAG, 'FaceDetectionService stopped via ViewModel.');
   }
 
@@ -157,21 +163,24 @@ export class FaceProximityViewModel {
   private _registerEvents(): void {
     emitter.on({ eventId: FACE_DETECTED_EVENT_ID }, async (event) => {
       const result = event.data as FaceDetectResult;
-      this.detectedCount++;
       this.lastDetectTime = result.timestamp;
+      this.faceCount = result.faceCount ?? 1;
+      this.faceConfidence = result.confidence ?? 1.0;
       if (this.presenceState !== PresenceState.PRESENT) {
+        this.detectedCount++;
         this.presenceState = PresenceState.PRESENT;
         await ScreenControlUtils.keepScreenOn(this._context!, FACE_GUARD_CONSTANTS.SCREEN_ON_KEEP_MS);
-        Logger.info(TAG, 'User PRESENT → screen kept on.');
+        Logger.info(TAG, `User PRESENT (faces=${this.faceCount}, conf=${this.faceConfidence.toFixed(2)}) → screen kept on.`);
       }
     });
 
     emitter.on({ eventId: FACE_LOST_EVENT_ID }, async (event) => {
       const result = event.data as FaceDetectResult;
       this.lastDetectTime = result.timestamp;
+      this.faceCount = 0;
+      this.faceConfidence = 0.0;
       if (this.presenceState !== PresenceState.ABSENT) {
         this.presenceState = PresenceState.ABSENT;
-        // 亮度降为 0 + 释放唤醒锁，实现"关屏"效果
         await ScreenControlUtils.turnScreenOff(this._context!);
         Logger.info(TAG, 'User ABSENT → screen turned off.');
       }
