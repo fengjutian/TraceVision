@@ -149,14 +149,19 @@ export class ProximityService {
         this._emit(BLE_EVENTS.DEVICE_UPDATED, updated);
         Logger.debug('ProximityService', `Device updated: ${deviceId} rssi=${rssi}`);
       } else {
+        // fix Major#9：ScanResult 无 deviceName / serviceUuids 字段
+        // 设备名从广播数据原始包尝试解析，解析失败时使用设备 ID 后缀作为降级名称
+        const deviceName: string = this._parseDeviceName(result.data) ??
+          `Bread-${deviceId.slice(-5)}`;
+        const advertiseData: string = this._parseAdvertiseData(result.data);
         const newDevice: BreadDevice = {
           deviceId,
-          name: result.deviceName || `Bread-${deviceId.slice(-5)}`,
+          name: deviceName,
           rssi,
           proximityLevel: level,
           status: DeviceStatus.ACTIVE,
           lastSeenAt: now,
-          advertiseData: this._parseAdvertiseData(result.serviceUuids),
+          advertiseData,
         };
         this._devices.set(deviceId, newDevice);
         this._emit(BLE_EVENTS.DEVICE_FOUND, newDevice);
@@ -197,7 +202,49 @@ export class ProximityService {
     emitter.emit({ eventId: BLE_EVENTS.SCAN_STATE }, { data });
   }
 
-  private _parseAdvertiseData(serviceUuids: Array<string> | undefined): string {
-    return serviceUuids?.join(',') ?? '';
+  private _parseAdvertiseData(rawData: ArrayBuffer | undefined): string {
+    // 将原始广播数据转为十六进制字符串，供上层展示
+    if (!rawData || rawData.byteLength === 0) {
+      return '';
+    }
+    try {
+      const bytes = new Uint8Array(rawData);
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(' ')
+        .toUpperCase();
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * 从 BLE 广播原始数据中尝试解析 Complete/Shortened Local Name（AD Type 0x08/0x09）
+   * 解析失败返回 null，由调用方使用降级名称
+   */
+  private _parseDeviceName(rawData: ArrayBuffer | undefined): string | null {
+    if (!rawData || rawData.byteLength === 0) {
+      return null;
+    }
+    try {
+      const bytes = new Uint8Array(rawData);
+      let offset = 0;
+      while (offset + 1 < bytes.length) {
+        const len = bytes[offset];
+        if (len === 0) {
+          break;
+        }
+        const type = bytes[offset + 1];
+        // AD Type 0x08: Shortened Local Name / 0x09: Complete Local Name
+        if ((type === 0x08 || type === 0x09) && len > 1) {
+          const nameBytes = bytes.slice(offset + 2, offset + 1 + len);
+          return new TextDecoder('utf-8').decode(nameBytes);
+        }
+        offset += 1 + len;
+      }
+    } catch {
+      // 解析失败静默降级
+    }
+    return null;
   }
 }

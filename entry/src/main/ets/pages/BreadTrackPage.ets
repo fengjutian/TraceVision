@@ -69,7 +69,11 @@ struct BreadTrackPage {
 
       router.pushUrl({
         url: ROUTES.BREAD_DETAIL,
-        params: { deviceId: device.deviceId, deviceName: device.name },
+        params: {
+          deviceId: device.deviceId,
+          deviceName: device.name,
+          deviceSnapshot: JSON.stringify(device),
+        },
       }).then(() => {
         this.isNavigating = false;
       }).catch((e: Error) => {
@@ -196,7 +200,11 @@ struct BreadTrackPage {
                 // 手动点击也能跳转详情
                 router.pushUrl({
                   url: ROUTES.BREAD_DETAIL,
-                  params: { deviceId: d.deviceId, deviceName: d.name },
+                  params: {
+                    deviceId: d.deviceId,
+                    deviceName: d.name,
+                    deviceSnapshot: JSON.stringify(d),
+                  },
                 });
               },
             })
