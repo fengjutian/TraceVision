@@ -1,0 +1,21 @@
+{
+  "string": [
+    { "name": "module_desc",                "value": "面包追踪 - 基于蓝牙近距离感知" },
+    { "name": "EntryAbility_desc",          "value": "TraceVision Entry Ability" },
+    { "name": "EntryAbility_label",         "value": "TraceVision" },
+    { "name": "permission_bluetooth_reason","value": "需要蓝牙权限以扫描并追踪附近的面包设备" },
+    { "name": "permission_location_reason", "value": "蓝牙扫描需要位置权限以发现附近设备" },
+    { "name": "app_name",                   "value": "TraceVision" },
+    { "name": "bread_track_title",          "value": "面包追踪" },
+    { "name": "scanning",                   "value": "正在扫描..." },
+    { "name": "scan_start",                 "value": "开始扫描" },
+    { "name": "scan_stop",                  "value": "停止扫描" },
+    { "name": "no_device_found",            "value": "暂未发现附近设备" },
+    { "name": "proximity_near",             "value": "近距离" },
+    { "name": "proximity_medium",           "value": "中距离" },
+    { "name": "proximity_far",              "value": "远距离" },
+    { "name": "permission_denied_tip",      "value": "请在设置中开启蓝牙和位置权限" },
+    { "name": "auto_open_tip",              "value": "设备靠近时自动打开详情" },
+    { "name": "auto_close_tip",             "value": "设备离开后自动关闭详情" }
+  ]
+}
