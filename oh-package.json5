@@ -6,6 +6,6 @@
   "license": "Apache-2.0",
   "dependencies": {},
   "devDependencies": {
-    "@ohos/hvigor-ohos-plugin": "4.2.0"
+    "@ohos/hvigor-ohos-plugin": "6.22.3"
   }
 }

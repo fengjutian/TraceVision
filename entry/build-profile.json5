@@ -1,26 +1,12 @@
 {
   "apiType": "stageMode",
-  "buildOption": {
-    "strictMode": {
-      "caseSensitiveCheck": true,
-      "useNormalizedOHMUrl": true
-    }
-  },
-  "buildOptionSet": [
-    {
-      "name": "release",
-      "arkOptions": {
-        "obfuscation": {
-          "ruleOptions": {
-            "enable": true,
-            "files": ["./obfuscation-rules.txt"]
-          }
-        }
-      }
-    }
-  ],
+  "buildOption": {},
   "targets": [
-    { "name": "default" },
-    { "name": "ohosTest" }
+    {
+      "name": "default",
+      "applyToProducts": [
+        "default"
+      ]
+    }
   ]
 }
