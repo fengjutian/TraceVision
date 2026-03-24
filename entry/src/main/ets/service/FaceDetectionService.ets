@@ -66,6 +66,10 @@ class FaceDetectionService {
   private _cameraSession: camera.PhotoSession | null = null;
   private _previewOutput: camera.PreviewOutput | null = null;
   private _surfaceId: string = '';
+  /** 实际选用的预览宽度（px），0 表示未初始化 */
+  previewWidth: number = 0;
+  /** 实际选用的预览高度（px），0 表示未初始化 */
+  previewHeight: number = 0;
 
   // ── 传感器相关 ──────────────────────────────────────────────────
   private _proxCallback: ((data: sensor.ProximityResponse) => void) | null = null;
@@ -148,6 +152,9 @@ class FaceDetectionService {
 
     // 选择最接近 16:9 的预览分辨率，避免预览画面拉伸
     const previewProfile = this._getBestPreviewProfile(frontCamera);
+    // 记录实际尺寸，供 UI 层设置 XComponent 宽高比
+    this.previewWidth = previewProfile.size.width;
+    this.previewHeight = previewProfile.size.height;
     this._previewOutput = this._cameraManager.createPreviewOutput(
       previewProfile,
       this._surfaceId

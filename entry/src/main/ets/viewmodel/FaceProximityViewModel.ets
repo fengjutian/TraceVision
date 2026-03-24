@@ -52,6 +52,10 @@ export class FaceProximityViewModel {
   surfaceId: string = '';
   /** 服务状态 */
   serviceState: FaceServiceState = FaceServiceState.IDLE;
+  /** 摄像头实际预览宽度（用于 UI 计算宽高比，0 表示未知） */
+  previewWidth: number = 0;
+  /** 摄像头实际预览高度（用于 UI 计算宽高比，0 表示未知） */
+  previewHeight: number = 0;
 
   private _context: common.UIAbilityContext | null = null;
 
@@ -82,6 +86,9 @@ export class FaceProximityViewModel {
       await FaceDetectionService.start(this._context!, surfaceId);
       this.isServiceRunning = true;
       this.errorMessage = '';
+      // 读取实际选取的预览尺寸，供 UI 正确设置 XComponent 宽高比
+      this.previewWidth = FaceDetectionService.previewWidth;
+      this.previewHeight = FaceDetectionService.previewHeight;
       Logger.info(TAG, 'FaceDetectionService started via ViewModel.');
     } catch (err) {
       const e = err as BusinessError;

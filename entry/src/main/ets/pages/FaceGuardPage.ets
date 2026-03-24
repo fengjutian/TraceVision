@@ -18,6 +18,13 @@ const TAG: string = 'FaceGuardPage';
 @Component
 struct FaceGuardPage {
   @State private vm: FaceProximityViewModel = new FaceProximityViewModel();
+  /**
+   * 摄像头预览宽高比（width/height）。
+   * 前置摄像头帧通常是横向（如 1920×1080 → 16/9），渲染到竖屏时系统旋转90°，
+   * 所以 XComponent 实际显示比例应取倒数（height/width），即 9/16。
+   * 默认 9/16，服务启动后根据实际 Profile 更新。
+   */
+  @State private _previewRatio: number = 9 / 16;
   /** XComponent surfaceId，由 onLoad 回调获取 */
   private _xComponentController: XComponentController = new XComponentController();
 
@@ -40,7 +47,16 @@ struct FaceGuardPage {
   private _onXComponentLoad(): void {
     const surfaceId = this._xComponentController.getXComponentSurfaceId();
     Logger.info(TAG, `XComponent loaded, surfaceId=${surfaceId}`);
-    this.vm.startService(surfaceId);
+    this.vm.startService(surfaceId).then(() => {
+      // 服务启动后更新宽高比，触发 XComponent 尺寸重算
+      const w: number = this.vm.previewWidth;
+      const h: number = this.vm.previewHeight;
+      if (w > 0 && h > 0) {
+        // 摄像头帧横向（w>h），竖屏显示时旋转90° → 显示比例取 h/w
+        this._previewRatio = w > h ? h / w : w / h;
+        Logger.info(TAG, `Preview ratio updated: ${this._previewRatio} (${w}x${h})`);
+      }
+    });
   }
 
   private _presenceLabel(): string {
@@ -131,7 +147,7 @@ struct FaceGuardPage {
   @Builder
   private _buildMainContent() {
     Column({ space: 0 }) {
-      // 摄像头预览区域（固定高度，XComponent 内容等比缩放不拉伸）
+      // 摄像头预览区域（aspectRatio 根据实际 Profile 动态更新，避免拉伸）
       Stack({ alignContent: Alignment.Bottom }) {
         XComponent({
           id: 'facePreview',
@@ -139,7 +155,7 @@ struct FaceGuardPage {
           controller: this._xComponentController,
         })
           .width('100%')
-          .height(320)
+          .aspectRatio(this._previewRatio)
           .onLoad(() => {
             this._onXComponentLoad();
           })
