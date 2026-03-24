@@ -11,6 +11,9 @@
     { "name": "proximity_near",          "value": "#52C41A" },
     { "name": "proximity_medium",        "value": "#FAAD14" },
     { "name": "proximity_far",           "value": "#FF4D4F" },
-    { "name": "divider",                 "value": "#F0F0F0" }
+    { "name": "divider",                 "value": "#F0F0F0" },
+    { "name": "state_present",           "value": "#52C41A" },
+    { "name": "state_absent",            "value": "#AAAAAA" },
+    { "name": "face_guard_btn",          "value": "#1890FF" }
   ]
 }

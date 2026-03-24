@@ -47,4 +47,17 @@ export namespace ROUTES {
   export const INDEX: string = 'pages/Index';
   export const BREAD_TRACK: string = 'pages/BreadTrackPage';
   export const BREAD_DETAIL: string = 'pages/BreadDetailPage';
+  export const FACE_GUARD: string = 'pages/FaceGuardPage';
+}
+
+/** 面部识别相关常量 */
+export namespace FACE_GUARD_CONSTANTS {
+  /** 摄像头采图帧间隔（ms），降低 CPU 占用 */
+  export const CAPTURE_INTERVAL_MS: number = 500;
+  /** 无人脸持续多久后判定"离开"（ms） */
+  export const LEAVE_CONFIRM_MS: number = 3000;
+  /** 检测到人脸持续多久后判定"靠近"（ms） */
+  export const ARRIVE_CONFIRM_MS: number = 800;
+  /** 亮屏保持时长：超时后再次熄屏（ms，0=永不超时） */
+  export const SCREEN_ON_KEEP_MS: number = 0;
 }
