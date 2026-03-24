@@ -4,8 +4,8 @@
  * @author  TraceVision Team
  * @date    2026-03-24
  */
-import { BreadDevice, DeviceStatus } from '../model/BreadDevice';
-import { estimateDistance } from '../utils/ProximityUtils';
+import { BreadDevice, DeviceStatus } from '../../model/BreadDevice';
+import { estimateDistance } from '../../utils/ProximityUtils';
 import { ProximityBadge } from './ProximityBadge';
 
 /** 点击回调类型 */

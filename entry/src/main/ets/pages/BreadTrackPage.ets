@@ -175,7 +175,6 @@ struct BreadTrackPage {
 
   @Builder
   private _buildScanStatusBar() {
-    // T46：蓝牙未开启 → 显示引导横幅
     if (!this.viewModel.bluetoothEnabled) {
       this._buildAlertBanner(
         '蓝牙未开启',
@@ -185,11 +184,8 @@ struct BreadTrackPage {
           const context = getContext(this) as common.UIAbilityContext;
           this.viewModel.openBluetoothSettings(context);
         }
-      );
-      return;
-    }
-    // T47：权限被拒 → 显示引导横幅
-    if (this.viewModel.permissionDenied) {
+      )
+    } else if (this.viewModel.permissionDenied) {
       this._buildAlertBanner(
         '权限未授权',
         '需要蓝牙和位置权限，请在设置中开启',
@@ -198,32 +194,31 @@ struct BreadTrackPage {
           const context = getContext(this) as common.UIAbilityContext;
           this.viewModel.openPermissionSettings(context);
         }
-      );
-      return;
-    }
-    // 正常扫描状态栏
-    Row({ space: 6 }) {
-      if (this.viewModel.scanSession.isScanning) {
-        LoadingProgress()
-          .width(16)
-          .height(16)
-          .color($r('app.color.brand_primary'))
-        Text('正在扫描附近面包设备...')
-          .fontSize(12)
-          .fontColor($r('app.color.brand_primary'))
-      } else if (this.viewModel.scanSession.error) {
-        Text(`⚠ ${this.viewModel.scanSession.error}`)
-          .fontSize(12)
-          .fontColor($r('app.color.proximity_far'))
-      } else {
-        Text('扫描已停止')
-          .fontSize(12)
-          .fontColor($r('app.color.text_hint'))
+      )
+    } else {
+      Row({ space: 6 }) {
+        if (this.viewModel.scanSession.isScanning) {
+          LoadingProgress()
+            .width(16)
+            .height(16)
+            .color($r('app.color.brand_primary'))
+          Text('正在扫描附近面包设备...')
+            .fontSize(12)
+            .fontColor($r('app.color.brand_primary'))
+        } else if (this.viewModel.scanSession.error) {
+          Text(`⚠ ${this.viewModel.scanSession.error}`)
+            .fontSize(12)
+            .fontColor($r('app.color.proximity_far'))
+        } else {
+          Text('扫描已停止')
+            .fontSize(12)
+            .fontColor($r('app.color.text_hint'))
+        }
       }
+      .width('100%')
+      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+      .backgroundColor('#FFF8F0')
     }
-    .width('100%')
-    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
-    .backgroundColor('#FFF8F0')
   }
 
   @Builder

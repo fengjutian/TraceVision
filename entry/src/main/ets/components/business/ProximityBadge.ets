@@ -5,8 +5,8 @@
  * @author  TraceVision Team
  * @date    2026-03-24
  */
-import { ProximityLevel } from '../model/BreadDevice';
-import { proximityLevelToLabel } from '../utils/ProximityUtils';
+import { ProximityLevel } from '../../model/BreadDevice';
+import { proximityLevelToLabel } from '../../utils/ProximityUtils';
 
 @Component
 export struct ProximityBadge {
