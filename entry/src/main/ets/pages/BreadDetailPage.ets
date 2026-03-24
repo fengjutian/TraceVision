@@ -96,19 +96,19 @@ struct BreadDetailPage {
       this._scheduleAutoClose();
     };
 
-    emitter.on({ eventId: BLE_EVENTS['DEVICE_UPDATED'] }, onUpdated);
-    emitter.on({ eventId: BLE_EVENTS['DEVICE_LOST'] }, onLost);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, onUpdated);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, onLost);
     this._listenerUpdated = onUpdated;
     this._listenerLost = onLost;
   }
 
   private _unregisterEvents(): void {
     if (this._listenerUpdated) {
-      emitter.off(BLE_EVENTS['DEVICE_UPDATED'], this._listenerUpdated);
+      emitter.off(BLE_EVENTS.DEVICE_UPDATED, this._listenerUpdated);
       this._listenerUpdated = null;
     }
     if (this._listenerLost) {
-      emitter.off(BLE_EVENTS['DEVICE_LOST'], this._listenerLost);
+      emitter.off(BLE_EVENTS.DEVICE_LOST, this._listenerLost);
       this._listenerLost = null;
     }
   }

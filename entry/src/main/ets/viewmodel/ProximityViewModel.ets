@@ -179,10 +179,10 @@ export class ProximityViewModel {
       };
     };
 
-    emitter.on({ eventId: BLE_EVENTS['DEVICE_FOUND'] }, onFound);
-    emitter.on({ eventId: BLE_EVENTS['DEVICE_UPDATED'] }, onUpdated);
-    emitter.on({ eventId: BLE_EVENTS['DEVICE_LOST'] }, onLost);
-    emitter.on({ eventId: BLE_EVENTS['SCAN_STATE'] }, onScan);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_FOUND }, onFound);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, onUpdated);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, onLost);
+    emitter.on({ eventId: BLE_EVENTS.SCAN_STATE }, onScan);
 
     this._internals.listenerFound = onFound;
     this._internals.listenerUpdated = onUpdated;
@@ -192,19 +192,19 @@ export class ProximityViewModel {
 
   private _unregisterBleEvents(): void {
     if (this._internals.listenerFound) {
-      emitter.off(BLE_EVENTS['DEVICE_FOUND'], this._internals.listenerFound);
+      emitter.off(BLE_EVENTS.DEVICE_FOUND, this._internals.listenerFound);
       this._internals.listenerFound = null;
     }
     if (this._internals.listenerUpdated) {
-      emitter.off(BLE_EVENTS['DEVICE_UPDATED'], this._internals.listenerUpdated);
+      emitter.off(BLE_EVENTS.DEVICE_UPDATED, this._internals.listenerUpdated);
       this._internals.listenerUpdated = null;
     }
     if (this._internals.listenerLost) {
-      emitter.off(BLE_EVENTS['DEVICE_LOST'], this._internals.listenerLost);
+      emitter.off(BLE_EVENTS.DEVICE_LOST, this._internals.listenerLost);
       this._internals.listenerLost = null;
     }
     if (this._internals.listenerScan) {
-      emitter.off(BLE_EVENTS['SCAN_STATE'], this._internals.listenerScan);
+      emitter.off(BLE_EVENTS.SCAN_STATE, this._internals.listenerScan);
       this._internals.listenerScan = null;
     }
   }

@@ -16,12 +16,12 @@ import { Logger } from '../utils/Logger';
 import { BLE_CONSTANTS, BREAD_PROTOCOL } from '../constants/AppConstants';
 
 /** EventHub 事件 ID 常量 */
-export const BLE_EVENTS: Record<string, number> = {
-  DEVICE_FOUND:   1001,
-  DEVICE_UPDATED: 1002,
-  DEVICE_LOST:    1003,
-  SCAN_STATE:     1004,
-};
+export namespace BLE_EVENTS {
+  export const DEVICE_FOUND:   number = 1001;
+  export const DEVICE_UPDATED: number = 1002;
+  export const DEVICE_LOST:    number = 1003;
+  export const SCAN_STATE:     number = 1004;
+}
 
 /** BLE 扫描事件数据结构 */
 export interface BleDeviceEventData {
@@ -149,7 +149,7 @@ export class ProximityService {
           batchInfo: existing.batchInfo,
         };
         this._devices.set(deviceId, updated);
-        this._emit(BLE_EVENTS['DEVICE_UPDATED'], updated);
+        this._emit(BLE_EVENTS.DEVICE_UPDATED, updated);
       } else {
         const deviceName: string = this._parseDeviceName(result.data) ?? `Bread-${deviceId.slice(-5)}`;
         const advertiseData: string = this._parseAdvertiseData(result.data);
@@ -165,7 +165,7 @@ export class ProximityService {
           batchInfo: batchInfo ?? undefined,
         };
         this._devices.set(deviceId, newDevice);
-        this._emit(BLE_EVENTS['DEVICE_FOUND'], newDevice);
+        this._emit(BLE_EVENTS.DEVICE_FOUND, newDevice);
         Logger.info('ProximityService', `New device found: ${deviceId} level=${level}`);
         this._fetchRemoteDeviceName(deviceId);
       }
@@ -189,7 +189,7 @@ export class ProximityService {
             batchInfo: device.batchInfo,
           };
           this._devices.set(id, lost);
-          this._emit(BLE_EVENTS['DEVICE_LOST'], lost);
+          this._emit(BLE_EVENTS.DEVICE_LOST, lost);
           Logger.info('ProximityService', `Device lost: ${id}`);
         }
       });
@@ -209,7 +209,7 @@ export class ProximityService {
 
   private _emitScanState(isScanning: boolean, error?: string): void {
     const data: BleScanStateEventData = { isScanning, error };
-    emitter.emit({ eventId: BLE_EVENTS['SCAN_STATE'] }, { data });
+    emitter.emit({ eventId: BLE_EVENTS.SCAN_STATE }, { data });
   }
 
   private _parseAdvertiseData(rawData: ArrayBuffer | undefined): string {
