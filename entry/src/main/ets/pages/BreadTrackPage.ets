@@ -39,7 +39,7 @@ struct BreadTrackPage {
       }
     );
 
-    // 异步初始化（申请权限 + 启动扫描）
+    // 异步初始化（检测蓝牙 + 申请权限 + 启动扫描）
     this.viewModel.init(context).catch((e: Error) => {
       Logger.error('BreadTrackPage', 'ViewModel init failed', e);
     });
@@ -49,6 +49,19 @@ struct BreadTrackPage {
     this.viewModel.unregisterAutoNavCallback();
     this.viewModel.destroy();
     this._clearToastTimer();
+  }
+
+  /**
+   * 从设置页返回后刷新状态（T46/T47：蓝牙或权限变更后重试）
+   * 通过 router 的 onPageShow 生命周期触发
+   */
+  onPageShow(): void {
+    const context = getContext(this) as common.UIAbilityContext;
+    if (!this.viewModel.bluetoothEnabled || !this.viewModel.hasPermission) {
+      this.viewModel.retryAfterSettings(context).catch((e: Error) => {
+        Logger.error('BreadTrackPage', 'Retry after settings failed', e);
+      });
+    }
   }
 
   // ─── 自动导航处理 ─────────────────────────────────────────────
@@ -162,6 +175,33 @@ struct BreadTrackPage {
 
   @Builder
   private _buildScanStatusBar() {
+    // T46：蓝牙未开启 → 显示引导横幅
+    if (!this.viewModel.bluetoothEnabled) {
+      this._buildAlertBanner(
+        '蓝牙未开启',
+        '请开启蓝牙以扫描附近面包设备',
+        '前往开启',
+        () => {
+          const context = getContext(this) as common.UIAbilityContext;
+          this.viewModel.openBluetoothSettings(context);
+        }
+      );
+      return;
+    }
+    // T47：权限被拒 → 显示引导横幅
+    if (this.viewModel.permissionDenied) {
+      this._buildAlertBanner(
+        '权限未授权',
+        '需要蓝牙和位置权限，请在设置中开启',
+        '前往设置',
+        () => {
+          const context = getContext(this) as common.UIAbilityContext;
+          this.viewModel.openPermissionSettings(context);
+        }
+      );
+      return;
+    }
+    // 正常扫描状态栏
     Row({ space: 6 }) {
       if (this.viewModel.scanSession.isScanning) {
         LoadingProgress()
@@ -184,6 +224,39 @@ struct BreadTrackPage {
     .width('100%')
     .padding({ left: 16, right: 16, top: 8, bottom: 8 })
     .backgroundColor('#FFF8F0')
+  }
+
+  @Builder
+  private _buildAlertBanner(
+    title: string,
+    desc: string,
+    btnText: string,
+    onPress: () => void
+  ) {
+    Row({ space: 10 }) {
+      Column({ space: 2 }) {
+        Text(title)
+          .fontSize(13)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.proximity_far'))
+        Text(desc)
+          .fontSize(11)
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+
+      Button(btnText)
+        .fontSize(12)
+        .fontColor(Color.White)
+        .backgroundColor($r('app.color.proximity_far'))
+        .borderRadius(14)
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .onClick(onPress)
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+    .backgroundColor('#FFF1F0')
   }
 
   @Builder

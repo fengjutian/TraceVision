@@ -17,6 +17,26 @@ export struct BreadDeviceCard {
   @Prop isActive: boolean = false;
   onTap: DeviceCardClickCallback = () => {};
 
+  /**
+   * 距离区间格式化（与 BreadDetailPage 保持一致，fix M1/I1）
+   * rssi === 0 时返回 '--'；正常值展示区间降低精度误导
+   */
+  private _formatDistanceRange(rssi: number): string {
+    if (rssi === 0) {
+      return '--';
+    }
+    const center: number = estimateDistance(rssi);
+    if (center < 0) {
+      return '--';
+    }
+    const low: number = Math.max(0, center * 0.5);
+    const high: number = center * 1.5;
+    if (low < 1) {
+      return `< ${high.toFixed(1)} m`;
+    }
+    return `${low.toFixed(1)} ~ ${high.toFixed(1)} m`;
+  }
+
   private _formatTime(ts: number): string {
     const d = new Date(ts);
     const hh = d.getHours().toString().padStart(2, '0');
@@ -61,7 +81,7 @@ export struct BreadDeviceCard {
           Text('估算距离')
             .fontSize(11)
             .fontColor($r('app.color.text_hint'))
-          Text(`≈ ${estimateDistance(this.device.rssi).toFixed(1)} m`)
+          Text(this._formatDistanceRange(this.device.rssi))
             .fontSize(14)
             .fontColor($r('app.color.text_secondary'))
         }

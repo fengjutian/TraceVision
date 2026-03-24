@@ -9,13 +9,21 @@
 import emitter from '@ohos.events.emitter';
 import abilityAccessCtrl from '@ohos.abilityAccessCtrl';
 import common from '@ohos.app.ability.common';
+import Want from '@ohos.app.ability.Want';
 import { BreadDevice, DeviceStatus, ProximityLevel, ScanSession, AutoNavAction } from '../model/BreadDevice';
 import { ProximityService, BLE_EVENTS, BleDeviceEventData, BleScanStateEventData } from '../service/ProximityService';
 import { Logger } from '../utils/Logger';
-import { AUTO_NAV_DELAY } from '../constants/AppConstants';
+import { AUTO_NAV_DELAY, STORAGE_KEYS } from '../constants/AppConstants';
 
 /** 自动导航回调函数类型 */
 export type AutoNavCallback = (action: AutoNavAction, device: BreadDevice) => void;
+
+// ─── 全局活跃 ViewModel 注册（供 BreadDetailPage 回调 notifyDetailClosed） ───
+let _activeViewModel: ProximityViewModel | null = null;
+/** 获取当前活跃的 ViewModel（BreadTrackPage 在位时有值，否则为 null） */
+export function getActiveViewModel(): ProximityViewModel | null {
+  return _activeViewModel;
+}
 
 // ─── 非响应式辅助类（不能放在 @Observed 里的私有状态） ─────────────────────
 class ViewModelInternals {
@@ -44,6 +52,10 @@ export class ProximityViewModel {
   scanSession: ScanSession = { isScanning: false, startedAt: null, error: null };
   /** 权限是否已授权 */
   hasPermission: boolean = false;
+  /** 权限是否被永久拒绝（需引导用户前往设置，T47） */
+  permissionDenied: boolean = false;
+  /** 蓝牙是否已开启（T46） */
+  bluetoothEnabled: boolean = true;
   /** 当前自动打开的设备 ID（null 表示无） */
   activeDeviceId: string | null = null;
 
@@ -57,19 +69,85 @@ export class ProximityViewModel {
    * @param context - Ability 上下文，用于权限申请
    */
   async init(context: common.UIAbilityContext): Promise<void> {
-    this.hasPermission = await this._requestPermissions(context);
+    _activeViewModel = this;
+
+    // T46：先检测蓝牙是否已开启，未开启直接提示，不请求权限
+    this.bluetoothEnabled = this._internals.service.isBluetoothEnabled();
+    if (!this.bluetoothEnabled) {
+      this.scanSession = { ...this.scanSession, error: '蓝牙未开启，请先开启蓝牙' };
+      Logger.warn('ProximityViewModel', 'Bluetooth is disabled');
+      return;
+    }
+
+    // T47：请求权限，区分"拒绝"和"永久拒绝"
+    const permResult = await this._requestPermissionsWithDetail(context);
+    this.hasPermission = permResult.granted;
+    this.permissionDenied = permResult.denied;
+
     if (!this.hasPermission) {
       this.scanSession = { ...this.scanSession, error: '蓝牙或位置权限未授权' };
       return;
     }
     this._registerBleEvents();
-    this.startScan();
+    // T50：读取持久化扫描状态，默认 true（首次安装自动扫描）
+    const scanEnabled: boolean = AppStorage.get<boolean>(STORAGE_KEYS.SCAN_ENABLED) ?? true;
+    if (scanEnabled) {
+      this.startScan();
+    }
+  }
+
+  /**
+   * 重新检查蓝牙状态并尝试启动扫描（用户从设置页返回后调用）
+   */
+  async retryAfterSettings(context: common.UIAbilityContext): Promise<void> {
+    this.bluetoothEnabled = this._internals.service.isBluetoothEnabled();
+    if (!this.bluetoothEnabled) {
+      this.scanSession = { ...this.scanSession, error: '蓝牙未开启，请先开启蓝牙' };
+      return;
+    }
+    if (!this.hasPermission) {
+      await this.init(context);
+      return;
+    }
+    if (!this.scanSession.isScanning) {
+      this.startScan();
+    }
+  }
+
+  /**
+   * 跳转蓝牙系统设置页（T46）
+   */
+  openBluetoothSettings(context: common.UIAbilityContext): void {
+    const want: Want = {
+      bundleName: 'com.huawei.hmos.settings',
+      abilityName: 'com.huawei.hmos.settings.MainAbility',
+      uri: 'bluetooth',
+    };
+    context.startAbility(want).catch((e: Error) => {
+      Logger.warn('ProximityViewModel', `Open BT settings failed: ${e.message}`);
+    });
+  }
+
+  /**
+   * 跳转应用权限设置页（T47）
+   */
+  openPermissionSettings(context: common.UIAbilityContext): void {
+    const want: Want = {
+      bundleName: 'com.huawei.hmos.settings',
+      abilityName: 'com.huawei.hmos.settings.MainAbility',
+      uri: 'application_info_entry',
+      parameters: { 'pushParams': context.applicationInfo.name },
+    };
+    context.startAbility(want).catch((e: Error) => {
+      Logger.warn('ProximityViewModel', `Open permission settings failed: ${e.message}`);
+    });
   }
 
   /**
    * 销毁：停止扫描、注销事件、清理定时器
    */
   destroy(): void {
+    _activeViewModel = null;
     this.stopScan();
     this._unregisterBleEvents();
     this._clearAllAutoNavTimers();
@@ -78,17 +156,19 @@ export class ProximityViewModel {
 
   // ─── 公开操作 ─────────────────────────────────────────────────
 
-  /** 启动 BLE 扫描 */
+  /** 启动 BLE 扫描（T50：持久化扫描状态） */
   startScan(): void {
     if (!this.hasPermission) {
       Logger.warn('ProximityViewModel', 'Cannot scan: no permission');
       return;
     }
+    AppStorage.setOrCreate<boolean>(STORAGE_KEYS.SCAN_ENABLED, true);
     this._internals.service.startScan();
   }
 
-  /** 停止 BLE 扫描 */
+  /** 停止 BLE 扫描（T50：持久化扫描状态） */
   stopScan(): void {
+    AppStorage.setOrCreate<boolean>(STORAGE_KEYS.SCAN_ENABLED, false);
     this._internals.service.stopScan();
   }
 
@@ -201,7 +281,7 @@ export class ProximityViewModel {
 
   /**
    * 设备靠近时防抖调度自动打开
-   * 防抖策略：若在 OPEN_DEBOUNCE_MS 内设备信号再次变远，取消打开
+   * T48：多设备同时 NEAR 时，选取 RSSI 最强（数值最大）的设备打开
    */
   private _scheduleAutoOpen(device: BreadDevice): void {
     if (device.proximityLevel !== ProximityLevel.NEAR) {
@@ -212,14 +292,33 @@ export class ProximityViewModel {
     this._cancelAutoNavTimer(openKey);
 
     const timerId: number = setTimeout(() => {
+      // 二次确认：当前设备仍为 NEAR + ACTIVE
       const latest: BreadDevice | undefined = this.devices.find(
         d => d.deviceId === device.deviceId
       );
-      if (latest?.proximityLevel === ProximityLevel.NEAR &&
-          latest.status === DeviceStatus.ACTIVE &&
-          this.activeDeviceId !== device.deviceId) {
+      if (!latest ||
+          latest.proximityLevel !== ProximityLevel.NEAR ||
+          latest.status !== DeviceStatus.ACTIVE) {
+        this._internals.autoNavTimers.delete(openKey);
+        return;
+      }
+
+      // T48：若已有激活设备，比较 RSSI，仅当本设备信号更强时才抢占
+      if (this.activeDeviceId !== null && this.activeDeviceId !== device.deviceId) {
+        const activeDevice = this.devices.find(d => d.deviceId === this.activeDeviceId);
+        if (activeDevice &&
+            activeDevice.status === DeviceStatus.ACTIVE &&
+            activeDevice.rssi >= latest.rssi) {
+          // 当前激活设备信号更强或相等，不抢占
+          this._internals.autoNavTimers.delete(openKey);
+          return;
+        }
+      }
+
+      if (this.activeDeviceId !== device.deviceId) {
         this.activeDeviceId = device.deviceId;
-        Logger.info('ProximityViewModel', `Auto OPEN triggered for ${device.deviceId}`);
+        Logger.info('ProximityViewModel',
+          `Auto OPEN triggered for ${device.deviceId} rssi=${latest.rssi}`);
         this._internals.autoNavCallback?.(AutoNavAction.OPEN, latest);
       }
       this._internals.autoNavTimers.delete(openKey);
@@ -243,7 +342,9 @@ export class ProximityViewModel {
 
   // ─── 权限申请 ─────────────────────────────────────────────────
 
-  private async _requestPermissions(context: common.UIAbilityContext): Promise<boolean> {
+  private async _requestPermissionsWithDetail(
+    context: common.UIAbilityContext
+  ): Promise<{ granted: boolean; denied: boolean }> {
     try {
       const atManager = abilityAccessCtrl.createAtManager();
       const result = await atManager.requestPermissionsFromUser(context, [
@@ -254,11 +355,15 @@ export class ProximityViewModel {
       const granted: boolean = result.authResults.every(
         r => r === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED
       );
+      // authResults: 0=GRANTED, -1=DENIED；若全部被拒且对话框不再弹出则视为永久拒绝
+      const anyDenied: boolean = result.authResults.some(
+        r => r !== abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED
+      );
       Logger.info('ProximityViewModel', `Permissions granted: ${granted}`);
-      return granted;
+      return { granted, denied: anyDenied && !granted };
     } catch (e) {
       Logger.error('ProximityViewModel', 'Permission request failed', e as Error);
-      return false;
+      return { granted: false, denied: false };
     }
   }
 }

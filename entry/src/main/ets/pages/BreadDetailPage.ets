@@ -11,6 +11,7 @@ import router from '@ohos.router';
 import emitter from '@ohos.events.emitter';
 import { BreadDevice, DeviceStatus, ProximityLevel } from '../model/BreadDevice';
 import { BLE_EVENTS, BleDeviceEventData } from '../service/ProximityService';
+import { getActiveViewModel } from '../viewmodel/ProximityViewModel';
 import { ProximityBadge } from '../components/business/ProximityBadge';
 import { estimateDistance, proximityLevelToLabel } from '../utils/ProximityUtils';
 import { AUTO_NAV_DELAY, RSSI_HISTORY_MAX } from '../constants/AppConstants';
@@ -75,6 +76,8 @@ struct BreadDetailPage {
   aboutToDisappear(): void {
     this._unregisterEvents();
     this._clearTimers();
+    // fix L1：通知 ViewModel 重置 activeDeviceId，确保同设备下次靠近仍能自动打开
+    getActiveViewModel()?.notifyDetailClosed(this._deviceId);
     Logger.info('BreadDetailPage', `Closed for device: ${this._deviceId}`);
   }
 
@@ -296,6 +299,36 @@ struct BreadDetailPage {
           .fontSize(11)
           .fontColor($r('app.color.text_hint'))
           .width('100%')
+      }
+
+      // T54：展示批次信息（若硬件支持私有 Manufacturer Data 协议）
+      if (this.device?.batchInfo) {
+        Divider().color($r('app.color.divider'))
+        Column({ space: 8 }) {
+          Text('批次信息')
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
+          Grid() {
+            GridItem() {
+              this._buildMetric('批次号', this.device.batchInfo.batchId || '--')
+            }
+            GridItem() {
+              this._buildMetric('生产日期', this.device.batchInfo.productDate)
+            }
+            GridItem() {
+              this._buildMetric('储存要求', this.device.batchInfo.tempLevel)
+            }
+            GridItem() {
+              this._buildMetric('保质期', `${this.device.batchInfo.shelfDays} 天`)
+            }
+          }
+          .columnsTemplate('1fr 1fr')
+          .rowsGap(10)
+          .columnsGap(12)
+          .width('100%')
+        }
       }
     }
     .width('100%')

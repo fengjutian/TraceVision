@@ -16,6 +16,7 @@
     { "name": "proximity_far",              "value": "远距离" },
     { "name": "permission_denied_tip",      "value": "请在设置中开启蓝牙和位置权限" },
     { "name": "auto_open_tip",              "value": "设备靠近时自动打开详情" },
-    { "name": "auto_close_tip",             "value": "设备离开后自动关闭详情" }
+    { "name": "auto_close_tip",             "value": "设备离开后自动关闭详情" },
+    { "name": "permission_background_reason","value": "后台持续追踪面包设备需要后台运行权限" }
   ]
 }

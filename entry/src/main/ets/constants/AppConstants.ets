@@ -33,14 +33,30 @@ export const AUTO_NAV_DELAY = {
   CLOSE_DEBOUNCE_MS: 3000,
 } as const;
 
-/** AppStorage 全局 Key */
+/** AppStorage 全局 Key（T50：用于持久化扫描开关状态） */
 export const STORAGE_KEYS = {
-  ACTIVE_BREAD_DEVICE_ID: 'activeBreadDeviceId',
+  /** 扫描开关状态：boolean，true = 用户上次选择了开启扫描 */
   SCAN_ENABLED: 'scanEnabled',
 } as const;
 
 /** RSSI 历史记录最大条数（fix Major#7：常量化，不放在页面实例变量里） */
 export const RSSI_HISTORY_MAX: number = 20;
+
+/**
+ * T54：面包设备私有 Manufacturer Data 协议常量
+ * AD Type 0xFF，Company ID = 0xFFBB（小端序），协议版本 0x01
+ */
+export const BREAD_PROTOCOL = {
+  /** Manufacturer Data Company ID（小端序两字节） */
+  COMPANY_ID_LO: 0xFF,
+  COMPANY_ID_HI: 0xBB,
+  /** 当前支持的协议版本 */
+  VERSION: 0x01,
+  /** Manufacturer Data 最小有效字节长度（含 Company ID 2B + Version 1B） */
+  MIN_LENGTH: 13,
+  /** 温度等级映射 */
+  TEMP_LEVEL: ['常温', '冷藏（4℃）', '冷冻（-18℃）'],
+} as const;
 
 /** 路由页面路径 */
 export const ROUTES = {
