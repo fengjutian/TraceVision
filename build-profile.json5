@@ -1,9 +1,24 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\26401\\.ohos\\config\\default_TraceVision_1dWkAOhOR-94GbJ7OZ7cqtj5CIxh5G_UBxxwCL0rftI=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B5E38A5D2872E8ED5378316FD61D75178D4D4AE3338B5C86A9FC4A863498F9969FD18AEE8822498",
+          "profile": "C:\\Users\\26401\\.ohos\\config\\default_TraceVision_1dWkAOhOR-94GbJ7OZ7cqtj5CIxh5G_UBxxwCL0rftI=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\26401\\.ohos\\config\\default_TraceVision_1dWkAOhOR-94GbJ7OZ7cqtj5CIxh5G_UBxxwCL0rftI=.p12",
+          "storePassword": "0000001BBD2376BBC5C41C244FFC52C8C87A11D4D35519DA364EC631AC86564A0C9748C0C15CF9ACB778F1"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.0(12)",
         "targetSdkVersion": "5.0.2(14)",
         "runtimeOS": "HarmonyOS"
