@@ -1,5 +1,5 @@
 {
-  "pages": [
+  "src": [
     "pages/Index",
     "pages/BreadTrackPage",
     "pages/BreadDetailPage"

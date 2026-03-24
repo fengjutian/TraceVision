@@ -5,7 +5,5 @@
   "author": "TraceVision Team",
   "license": "Apache-2.0",
   "dependencies": {},
-  "devDependencies": {
-    "@ohos/hvigor-ohos-plugin": "6.22.3"
-  }
+  "devDependencies": {}
 }
