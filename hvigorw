@@ -1,0 +1,10 @@
+#!/bin/sh
+##############################################################################
+##
+##  hvigorw startup script for UN*X
+##
+##############################################################################
+HVIGOR_HOME=${HVIGOR_HOME:-"$HOME/.hvigor/wrapper/tools"}
+DEFAULT_JVM_OPTS='"-Xmx2048m" "-Dfile.encoding=UTF-8"'
+CLASSPATH="$HVIGOR_HOME/hvigor-wrapper.jar"
+exec java $DEFAULT_JVM_OPTS -classpath "$CLASSPATH" com.huawei.hvigor.wrapper.BootstrapMain "$@"

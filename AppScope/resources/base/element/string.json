@@ -1,0 +1,6 @@
+{
+  "string": [
+    { "name": "app_name",  "value": "TraceVision" },
+    { "name": "app_desc",  "value": "BLE 近距离面包追踪应用" }
+  ]
+}

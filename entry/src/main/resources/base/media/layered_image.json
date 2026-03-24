@@ -1,0 +1,6 @@
+{
+  "layered-image": {
+    "background": "$color:brand_secondary",
+    "foreground": "$media:app_icon"
+  }
+}

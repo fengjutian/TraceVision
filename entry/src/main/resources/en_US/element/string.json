@@ -1,0 +1,22 @@
+{
+  "string": [
+    { "name": "module_desc",                 "value": "Bread Tracking - BLE Proximity Sensing" },
+    { "name": "EntryAbility_desc",           "value": "TraceVision Entry Ability" },
+    { "name": "EntryAbility_label",          "value": "TraceVision" },
+    { "name": "permission_bluetooth_reason", "value": "Bluetooth permission is required to scan and track nearby bread devices." },
+    { "name": "permission_location_reason",  "value": "Location permission is required for Bluetooth scanning to discover nearby devices." },
+    { "name": "permission_background_reason","value": "Background running permission is required to continuously track bread devices in background." },
+    { "name": "app_name",                    "value": "TraceVision" },
+    { "name": "bread_track_title",           "value": "Bread Tracking" },
+    { "name": "scanning",                    "value": "Scanning..." },
+    { "name": "scan_start",                  "value": "Start Scan" },
+    { "name": "scan_stop",                   "value": "Stop Scan" },
+    { "name": "no_device_found",             "value": "No nearby device found" },
+    { "name": "proximity_near",              "value": "Near" },
+    { "name": "proximity_medium",            "value": "Medium" },
+    { "name": "proximity_far",               "value": "Far" },
+    { "name": "permission_denied_tip",       "value": "Please enable Bluetooth and Location permissions in Settings." },
+    { "name": "auto_open_tip",               "value": "Auto open detail when device is close" },
+    { "name": "auto_close_tip",              "value": "Auto close detail when device moves away" }
+  ]
+}

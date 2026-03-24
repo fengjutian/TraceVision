@@ -1,0 +1,18 @@
+# Build outputs
+build/
+.preview/
+
+# DevEco Studio
+.idea/
+*.iml
+local.properties
+
+# hvigor cache
+.hvigor/
+oh_modules/
+
+# Signing
+*.p12
+*.cer
+*.jks
+build-profile.json5.bak

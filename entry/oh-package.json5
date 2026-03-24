@@ -1,0 +1,10 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "TraceVision entry module",
+  "main": "",
+  "author": "TraceVision Team",
+  "license": "Apache-2.0",
+  "dependencies": {}
+}
