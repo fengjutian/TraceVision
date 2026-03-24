@@ -1,23 +1,26 @@
 /**
  * @file    面包设备详情页
  * @desc    展示单个面包设备的详细信息及实时 RSSI 曲线；
- *          当设备信号丢失（DEVICE_LOST 事件）时自动关闭页面返回列表。
+ *          当设备信号丢失（DEVICE_LOST 事件）时启动倒计时并自动关闭页面返回列表。
+ *          设备快照通过路由参数传入，后续更新通过 emitter 订阅获取，
+ *          不直接访问 ProximityService 单例（遵循分层架构）。
  * @author  TraceVision Team
  * @date    2026-03-24
  */
 import router from '@ohos.router';
 import emitter from '@ohos.events.emitter';
 import { BreadDevice, DeviceStatus, ProximityLevel } from '../model/BreadDevice';
-import { ProximityService, BLE_EVENTS, BleDeviceEventData } from '../service/ProximityService';
+import { BLE_EVENTS, BleDeviceEventData } from '../service/ProximityService';
 import { ProximityBadge } from '../components/business/ProximityBadge';
 import { estimateDistance, proximityLevelToLabel } from '../utils/ProximityUtils';
-import { AUTO_NAV_DELAY } from '../constants/AppConstants';
+import { AUTO_NAV_DELAY, RSSI_HISTORY_MAX } from '../constants/AppConstants';
 import { Logger } from '../utils/Logger';
 
-/** 路由传参结构 */
+/** 路由传参结构：完整设备快照通过路由参数传递，不再从 Service 层直接读取 */
 interface DetailRouteParams {
   deviceId: string;
   deviceName: string;
+  deviceSnapshot: string; // JSON 序列化的 BreadDevice 快照
 }
 
 /** RSSI 历史记录点 */
@@ -38,12 +41,14 @@ struct BreadDetailPage {
   @State private rssiHistory: RssiPoint[] = [];
   @State private isAutoClosing: boolean = false;
   @State private autoCloseCountdown: number = 0;
-  /** 自动关闭倒计时显示文本 */
   @State private closeHint: string = '';
 
+  // ─── 非响应式私有字段 ─────────────────────────────────────────
   private _autoCloseTimer: number = -1;
   private _countdownTimer: number = -1;
-  private _MAX_HISTORY: number = 20;
+  /** 保存 listener 引用，用于精准注销（避免 emitter.off(id) 注销所有同 id 监听者） */
+  private _listenerUpdated: ((event: emitter.EventData) => void) | null = null;
+  private _listenerLost: ((event: emitter.EventData) => void) | null = null;
 
   // ─── 生命周期 ────────────────────────────────────────────────
 
@@ -52,13 +57,15 @@ struct BreadDetailPage {
     this._deviceId = params?.deviceId ?? '';
     this._deviceName = params?.deviceName ?? '未知设备';
 
-    // 从 Service 获取设备当前快照
-    const snapshot = ProximityService.getInstance()
-      .getDevices()
-      .find(d => d.deviceId === this._deviceId);
-    if (snapshot) {
-      this.device = snapshot;
-      this.rssiHistory = [{ rssi: snapshot.rssi, ts: snapshot.lastSeenAt }];
+    // 设备快照通过路由参数传入，不直接访问 ProximityService
+    if (params?.deviceSnapshot) {
+      try {
+        const snap: BreadDevice = JSON.parse(params.deviceSnapshot) as BreadDevice;
+        this.device = snap;
+        this.rssiHistory = [{ rssi: snap.rssi, ts: snap.lastSeenAt }];
+      } catch {
+        Logger.warn('BreadDetailPage', 'Failed to parse device snapshot from params');
+      }
     }
 
     this._registerEvents();
@@ -74,46 +81,56 @@ struct BreadDetailPage {
   // ─── BLE 事件监听 ─────────────────────────────────────────────
 
   private _registerEvents(): void {
-    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, (event) => {
+    const onUpdated = (event: emitter.EventData): void => {
       const data = event.data as BleDeviceEventData;
       if (data.device.deviceId !== this._deviceId) {
         return;
       }
       this.device = data.device;
-      // 记录 RSSI 历史
+      // 追加 RSSI 历史，使用时间戳作为 ForEach key（避免下标全量重渲染）
       this.rssiHistory = [
-        ...this.rssiHistory.slice(-(this._MAX_HISTORY - 1)),
+        ...this.rssiHistory.slice(-(RSSI_HISTORY_MAX - 1)),
         { rssi: data.device.rssi, ts: data.device.lastSeenAt },
       ];
       // 设备重新靠近时取消自动关闭
       if (data.device.proximityLevel === ProximityLevel.NEAR && this.isAutoClosing) {
         this._cancelAutoClose();
       }
-    });
+    };
 
-    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, (event) => {
+    const onLost = (event: emitter.EventData): void => {
       const data = event.data as BleDeviceEventData;
       if (data.device.deviceId !== this._deviceId) {
         return;
       }
-      Logger.info('BreadDetailPage', `Device lost signal, scheduling auto close`);
+      Logger.info('BreadDetailPage', 'Device lost signal, scheduling auto close');
       this.device = data.device;
       this._scheduleAutoClose();
-    });
+    };
+
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, onUpdated);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, onLost);
+
+    this._listenerUpdated = onUpdated;
+    this._listenerLost = onLost;
   }
 
   private _unregisterEvents(): void {
-    // 注意：此处 off 仅注销本页面注册的回调
-    // 因 emitter.off 会注销所有同 eventId 的监听者，
-    // 实际项目中应使用带 listener 引用的版本
-    emitter.off(BLE_EVENTS.DEVICE_UPDATED);
-    emitter.off(BLE_EVENTS.DEVICE_LOST);
+    // 精准注销，不影响 ViewModel 等其他组件注册的同 eventId 监听
+    if (this._listenerUpdated) {
+      emitter.off(BLE_EVENTS.DEVICE_UPDATED, this._listenerUpdated);
+      this._listenerUpdated = null;
+    }
+    if (this._listenerLost) {
+      emitter.off(BLE_EVENTS.DEVICE_LOST, this._listenerLost);
+      this._listenerLost = null;
+    }
   }
 
   // ─── 自动关闭逻辑 ─────────────────────────────────────────────
 
   /**
-   * 设备离开后触发，延迟 CLOSE_DEBOUNCE_MS 后自动返回
+   * 设备离开后启动倒计时，到期自动返回列表页
    * 期间显示倒计时提示，用户可手动取消
    */
   private _scheduleAutoClose(): void {
@@ -142,7 +159,7 @@ struct BreadDetailPage {
     this.isAutoClosing = false;
     this.closeHint = '';
     this._clearTimers();
-    Logger.info('BreadDetailPage', `Auto close cancelled (device returned)`);
+    Logger.info('BreadDetailPage', 'Auto close cancelled (device returned)');
   }
 
   private _clearTimers(): void {
@@ -160,19 +177,15 @@ struct BreadDetailPage {
 
   build() {
     Column() {
-      // 顶部导航栏
       this._buildHeader()
 
-      // 自动关闭提示横幅
       if (this.isAutoClosing) {
         this._buildAutoCloseBanner()
       }
 
       Scroll() {
         Column({ space: 16 }) {
-          // 设备核心信息卡
           this._buildInfoCard()
-          // RSSI 历史波形（简易文本可视化）
           this._buildRssiHistory()
         }
         .padding({ left: 16, right: 16, top: 12, bottom: 32 })
@@ -202,7 +215,6 @@ struct BreadDetailPage {
         .layoutWeight(1)
         .textAlign(TextAlign.Center)
 
-      // 占位，保持标题居中
       Button()
         .width(40)
         .backgroundColor(Color.Transparent)
@@ -237,7 +249,6 @@ struct BreadDetailPage {
   @Builder
   private _buildInfoCard() {
     Column({ space: 14 }) {
-      // 在线状态与近距离徽章
       Row() {
         Row({ space: 6 }) {
           Circle({ width: 10, height: 10 })
@@ -259,13 +270,13 @@ struct BreadDetailPage {
 
       Divider().color($r('app.color.divider'))
 
-      // 指标网格
       Grid() {
         GridItem() {
           this._buildMetric('RSSI', `${this.device?.rssi ?? '--'} dBm`)
         }
         GridItem() {
-          this._buildMetric('估算距离', `≈ ${estimateDistance(this.device?.rssi ?? -100).toFixed(1)} m`)
+          // 距离展示为区间范围，避免单点精度误导用户（Minor#12）
+          this._buildMetric('估算距离', this._formatDistanceRange(this.device?.rssi ?? -100))
         }
         GridItem() {
           this._buildMetric('近距离等级', proximityLevelToLabel(this.device?.proximityLevel ?? ProximityLevel.UNKNOWN))
@@ -318,12 +329,10 @@ struct BreadDetailPage {
         .fontColor($r('app.color.text_primary'))
         .width('100%')
 
-      // 简易 ASCII 波形：将 RSSI 映射到 0~10 格
       Row({ space: 2 }) {
         ForEach(
           this.rssiHistory,
-          (point: RssiPoint, index: number) => {
-            // RSSI 范围 -100 ~ -30，映射到高度 10~60
+          (point: RssiPoint) => {
             const normalized: number = Math.max(0,
               Math.min(1, (point.rssi + 100) / 70)
             );
@@ -341,28 +350,45 @@ struct BreadDetailPage {
               .borderRadius(2)
               .animation({ duration: 200, curve: Curve.EaseOut })
           },
-          (point: RssiPoint, index: number) => `${index}`
+          // 使用时间戳作为 key，避免下标导致全量重渲染（fix Critical#6）
+          (point: RssiPoint) => `${point.ts}`
         )
       }
       .width('100%')
       .height(70)
       .alignItems(VerticalAlign.Bottom)
 
-      Row() {
-        Text(`最低: ${Math.min(...this.rssiHistory.map(p => p.rssi))} dBm`)
-          .fontSize(11)
-          .fontColor($r('app.color.text_hint'))
-        Blank()
-        Text(`最高: ${Math.max(...this.rssiHistory.map(p => p.rssi))} dBm`)
-          .fontSize(11)
-          .fontColor($r('app.color.text_hint'))
+      if (this.rssiHistory.length > 0) {
+        Row() {
+          Text(`最低: ${Math.min(...this.rssiHistory.map(p => p.rssi))} dBm`)
+            .fontSize(11)
+            .fontColor($r('app.color.text_hint'))
+          Blank()
+          Text(`最高: ${Math.max(...this.rssiHistory.map(p => p.rssi))} dBm`)
+            .fontSize(11)
+            .fontColor($r('app.color.text_hint'))
+        }
+        .width('100%')
       }
-      .width('100%')
     }
     .width('100%')
     .padding(16)
     .backgroundColor($r('app.color.bg_card'))
     .borderRadius(12)
     .shadow({ radius: 4, color: '#00000010', offsetX: 0, offsetY: 2 })
+  }
+
+  /**
+   * 将 RSSI 转换为区间字符串展示，降低路径损耗模型的精度误导（fix Minor#12）
+   * 误差约 ±50%，因此以 0.5m 为步进展示区间
+   */
+  private _formatDistanceRange(rssi: number): string {
+    const center: number = estimateDistance(rssi);
+    const low: number = Math.max(0, center * 0.5);
+    const high: number = center * 1.5;
+    if (low < 1) {
+      return `< ${high.toFixed(1)} m`;
+    }
+    return `${low.toFixed(1)} ~ ${high.toFixed(1)} m`;
   }
 }

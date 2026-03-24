@@ -39,6 +39,9 @@ export const STORAGE_KEYS = {
   SCAN_ENABLED: 'scanEnabled',
 } as const;
 
+/** RSSI 历史记录最大条数（fix Major#7：常量化，不放在页面实例变量里） */
+export const RSSI_HISTORY_MAX: number = 20;
+
 /** 路由页面路径 */
 export const ROUTES = {
   INDEX: 'pages/Index',

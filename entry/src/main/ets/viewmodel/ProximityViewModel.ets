@@ -1,6 +1,7 @@
 /**
  * @file    近距离追踪 ViewModel
- * @desc    管理面包追踪页面的全部响应式状态，封装自动导航防抖逻辑。
+ * @desc    管理面包追踪页面的全部响应式状态，封装自动打开防抖逻辑。
+ *          自动关闭逻辑由 BreadDetailPage 独立处理，ViewModel 只维护列表状态。
  *          展示层只调用此 ViewModel，不直接操作 ProximityService。
  * @author  TraceVision Team
  * @date    2026-03-24
@@ -16,9 +17,24 @@ import { AUTO_NAV_DELAY } from '../constants/AppConstants';
 /** 自动导航回调函数类型 */
 export type AutoNavCallback = (action: AutoNavAction, device: BreadDevice) => void;
 
+// ─── 非响应式辅助类（不能放在 @Observed 里的私有状态） ─────────────────────
+class ViewModelInternals {
+  /** 自动打开防抖定时器 Map，key = deviceId + '_open' */
+  autoNavTimers: Map<string, number> = new Map();
+  /** 外部注册的自动导航回调 */
+  autoNavCallback: AutoNavCallback | null = null;
+  /** ProximityService 单例引用 */
+  service: ProximityService = ProximityService.getInstance();
+  /** emitter listener 引用，用于精准注销 */
+  listenerFound: ((event: emitter.EventData) => void) | null = null;
+  listenerUpdated: ((event: emitter.EventData) => void) | null = null;
+  listenerLost: ((event: emitter.EventData) => void) | null = null;
+  listenerScan: ((event: emitter.EventData) => void) | null = null;
+}
+
 /**
  * 面包追踪 ViewModel（每个页面实例持有一份）
- * 使用 @Observed 装饰，配合 @ObjectLink 实现细粒度更新
+ * 使用 @Observed 装饰，仅包含 UI 响应式字段，配合 @ObjectLink 实现细粒度更新
  */
 @Observed
 export class ProximityViewModel {
@@ -31,12 +47,8 @@ export class ProximityViewModel {
   /** 当前自动打开的设备 ID（null 表示无） */
   activeDeviceId: string | null = null;
 
-  /** 自动导航防抖定时器 Map，key = deviceId */
-  private _autoNavTimers: Map<string, number> = new Map();
-  /** 外部注册的自动导航回调 */
-  private _autoNavCallback: AutoNavCallback | null = null;
-  /** ProximityService 单例引用 */
-  private _service: ProximityService = ProximityService.getInstance();
+  /** 非响应式私有状态（Map / callback / service 等不应放在 @Observed 类里） */
+  private readonly _internals: ViewModelInternals = new ViewModelInternals();
 
   // ─── 生命周期 ─────────────────────────────────────────────────
 
@@ -72,12 +84,12 @@ export class ProximityViewModel {
       Logger.warn('ProximityViewModel', 'Cannot scan: no permission');
       return;
     }
-    this._service.startScan();
+    this._internals.service.startScan();
   }
 
   /** 停止 BLE 扫描 */
   stopScan(): void {
-    this._service.stopScan();
+    this._internals.service.stopScan();
   }
 
   /**
@@ -85,46 +97,81 @@ export class ProximityViewModel {
    * @param cb - 回调函数，接收 AutoNavAction 和触发设备
    */
   registerAutoNavCallback(cb: AutoNavCallback): void {
-    this._autoNavCallback = cb;
+    this._internals.autoNavCallback = cb;
   }
 
   /**
    * 取消注册自动导航回调（由页面在 aboutToDisappear 中调用）
    */
   unregisterAutoNavCallback(): void {
-    this._autoNavCallback = null;
+    this._internals.autoNavCallback = null;
+  }
+
+  /**
+   * 详情页关闭时通知 ViewModel 重置 activeDeviceId
+   * 确保下次同设备靠近仍能触发自动打开
+   */
+  notifyDetailClosed(deviceId: string): void {
+    if (this.activeDeviceId === deviceId) {
+      this.activeDeviceId = null;
+      Logger.info('ProximityViewModel', `activeDeviceId reset for ${deviceId}`);
+    }
   }
 
   // ─── BLE 事件处理 ─────────────────────────────────────────────
 
   private _registerBleEvents(): void {
-    emitter.on({ eventId: BLE_EVENTS.DEVICE_FOUND }, (event) => {
+    // 保存每个 listener 引用，供精准注销使用（fix: emitter.off(id) 会注销所有同 id 监听者）
+    const onFound = (event: emitter.EventData): void => {
       const data = event.data as BleDeviceEventData;
       this._onDeviceFound(data.device);
-    });
-    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, (event) => {
+    };
+    const onUpdated = (event: emitter.EventData): void => {
       const data = event.data as BleDeviceEventData;
       this._onDeviceUpdated(data.device);
-    });
-    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, (event) => {
+    };
+    const onLost = (event: emitter.EventData): void => {
       const data = event.data as BleDeviceEventData;
       this._onDeviceLost(data.device);
-    });
-    emitter.on({ eventId: BLE_EVENTS.SCAN_STATE }, (event) => {
+    };
+    const onScan = (event: emitter.EventData): void => {
       const data = event.data as BleScanStateEventData;
       this.scanSession = {
         isScanning: data.isScanning,
         startedAt: data.isScanning ? Date.now() : null,
         error: data.error ?? null,
       };
-    });
+    };
+
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_FOUND }, onFound);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_UPDATED }, onUpdated);
+    emitter.on({ eventId: BLE_EVENTS.DEVICE_LOST }, onLost);
+    emitter.on({ eventId: BLE_EVENTS.SCAN_STATE }, onScan);
+
+    this._internals.listenerFound = onFound;
+    this._internals.listenerUpdated = onUpdated;
+    this._internals.listenerLost = onLost;
+    this._internals.listenerScan = onScan;
   }
 
   private _unregisterBleEvents(): void {
-    emitter.off(BLE_EVENTS.DEVICE_FOUND);
-    emitter.off(BLE_EVENTS.DEVICE_UPDATED);
-    emitter.off(BLE_EVENTS.DEVICE_LOST);
-    emitter.off(BLE_EVENTS.SCAN_STATE);
+    // 精准注销：只移除本实例注册的 listener，不影响其他页面的监听者
+    if (this._internals.listenerFound) {
+      emitter.off(BLE_EVENTS.DEVICE_FOUND, this._internals.listenerFound);
+      this._internals.listenerFound = null;
+    }
+    if (this._internals.listenerUpdated) {
+      emitter.off(BLE_EVENTS.DEVICE_UPDATED, this._internals.listenerUpdated);
+      this._internals.listenerUpdated = null;
+    }
+    if (this._internals.listenerLost) {
+      emitter.off(BLE_EVENTS.DEVICE_LOST, this._internals.listenerLost);
+      this._internals.listenerLost = null;
+    }
+    if (this._internals.listenerScan) {
+      emitter.off(BLE_EVENTS.SCAN_STATE, this._internals.listenerScan);
+      this._internals.listenerScan = null;
+    }
   }
 
   private _onDeviceFound(device: BreadDevice): void {
@@ -136,7 +183,7 @@ export class ProximityViewModel {
     this.devices = this.devices.map(d =>
       d.deviceId === device.deviceId ? device : d
     );
-    // 如果近距离等级变为 NEAR，尝试触发自动打开
+    // 近距离等级变为 NEAR，且当前不是已激活设备时，尝试触发自动打开
     if (device.proximityLevel === ProximityLevel.NEAR &&
         this.activeDeviceId !== device.deviceId) {
       this._scheduleAutoOpen(device);
@@ -144,13 +191,13 @@ export class ProximityViewModel {
   }
 
   private _onDeviceLost(device: BreadDevice): void {
+    // 只更新列表状态；自动关闭导航由 BreadDetailPage 自行处理
     this.devices = this.devices.map(d =>
       d.deviceId === device.deviceId ? device : d
     );
-    this._scheduleAutoClose(device);
   }
 
-  // ─── 自动导航防抖逻辑 ─────────────────────────────────────────
+  // ─── 自动打开防抖逻辑 ─────────────────────────────────────────
 
   /**
    * 设备靠近时防抖调度自动打开
@@ -160,11 +207,11 @@ export class ProximityViewModel {
     if (device.proximityLevel !== ProximityLevel.NEAR) {
       return;
     }
-    // 清除同设备的关闭定时器（若有）
-    this._cancelAutoNavTimer(device.deviceId + '_close');
+
+    const openKey: string = device.deviceId + '_open';
+    this._cancelAutoNavTimer(openKey);
 
     const timerId: number = setTimeout(() => {
-      // 再次确认设备仍处于 NEAR 且 ACTIVE 状态
       const latest: BreadDevice | undefined = this.devices.find(
         d => d.deviceId === device.deviceId
       );
@@ -173,53 +220,25 @@ export class ProximityViewModel {
           this.activeDeviceId !== device.deviceId) {
         this.activeDeviceId = device.deviceId;
         Logger.info('ProximityViewModel', `Auto OPEN triggered for ${device.deviceId}`);
-        this._autoNavCallback?.(AutoNavAction.OPEN, latest);
+        this._internals.autoNavCallback?.(AutoNavAction.OPEN, latest);
       }
-      this._autoNavTimers.delete(device.deviceId + '_open');
+      this._internals.autoNavTimers.delete(openKey);
     }, AUTO_NAV_DELAY.OPEN_DEBOUNCE_MS);
 
-    this._autoNavTimers.set(device.deviceId + '_open', timerId);
-  }
-
-  /**
-   * 设备离开时防抖调度自动关闭
-   * 防抖策略：若在 CLOSE_DEBOUNCE_MS 内设备信号恢复，取消关闭
-   */
-  private _scheduleAutoClose(device: BreadDevice): void {
-    if (this.activeDeviceId !== device.deviceId) {
-      return;
-    }
-    // 清除同设备的打开定时器（若有）
-    this._cancelAutoNavTimer(device.deviceId + '_open');
-
-    const timerId: number = setTimeout(() => {
-      // 再次确认设备仍处于 LOST 状态
-      const latest: BreadDevice | undefined = this.devices.find(
-        d => d.deviceId === device.deviceId
-      );
-      if (latest?.status === DeviceStatus.LOST &&
-          this.activeDeviceId === device.deviceId) {
-        this.activeDeviceId = null;
-        Logger.info('ProximityViewModel', `Auto CLOSE triggered for ${device.deviceId}`);
-        this._autoNavCallback?.(AutoNavAction.CLOSE, latest);
-      }
-      this._autoNavTimers.delete(device.deviceId + '_close');
-    }, AUTO_NAV_DELAY.CLOSE_DEBOUNCE_MS);
-
-    this._autoNavTimers.set(device.deviceId + '_close', timerId);
+    this._internals.autoNavTimers.set(openKey, timerId);
   }
 
   private _cancelAutoNavTimer(key: string): void {
-    const timer: number | undefined = this._autoNavTimers.get(key);
+    const timer: number | undefined = this._internals.autoNavTimers.get(key);
     if (timer !== undefined) {
       clearTimeout(timer);
-      this._autoNavTimers.delete(key);
+      this._internals.autoNavTimers.delete(key);
     }
   }
 
   private _clearAllAutoNavTimers(): void {
-    this._autoNavTimers.forEach((timerId: number) => clearTimeout(timerId));
-    this._autoNavTimers.clear();
+    this._internals.autoNavTimers.forEach((timerId: number) => clearTimeout(timerId));
+    this._internals.autoNavTimers.clear();
   }
 
   // ─── 权限申请 ─────────────────────────────────────────────────
@@ -229,7 +248,6 @@ export class ProximityViewModel {
       const atManager = abilityAccessCtrl.createAtManager();
       const result = await atManager.requestPermissionsFromUser(context, [
         'ohos.permission.ACCESS_BLUETOOTH',
-        'ohos.permission.MANAGE_BLUETOOTH',
         'ohos.permission.APPROXIMATELY_LOCATION',
         'ohos.permission.LOCATION',
       ]);
